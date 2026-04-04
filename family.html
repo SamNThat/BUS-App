@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Family Dashboard — MediCare{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1>Hello, {{ family.name }} 👋</h1>
+    <p>Keeping an eye on {{ dashboard.patient_name }}'s medication.</p>
+  </div>
+
+  {# ── Patient summary ── #}
+  <div class="card" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap">
+    <div style="width:56px;height:56px;border-radius:50%;background:var(--sage-pale);display:grid;place-items:center;font-size:1.6rem;flex-shrink:0">👵</div>
+    <div>
+      <div style="font-family:'DM Serif Display',serif;font-size:1.3rem">{{ dashboard.patient_name }}</div>
+      <div class="text-muted">{{ dashboard.condition }} · Age {{ dashboard.age }}</div>
+    </div>
+    <div style="margin-left:auto">
+      {% if dashboard.adherence_7day >= 80 %}
+        <span class="badge badge-taken" style="font-size:.9rem;padding:.4rem 1rem">Doing well ✓</span>
+      {% elif dashboard.adherence_7day >= 50 %}
+        <span class="badge badge-due" style="font-size:.9rem;padding:.4rem 1rem">Needs attention</span>
+      {% else %}
+        <span class="badge badge-past" style="font-size:.9rem;padding:.4rem 1rem">Please check in</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Adherence stats ── #}
+  <div class="grid-2" style="margin-bottom:1.5rem">
+    <div class="card stat">
+      <div class="stat-val" style="color:{% if dashboard.adherence_7day >= 80 %}var(--sage){% elif dashboard.adherence_7day >= 50 %}var(--amber){% else %}var(--rose){% endif %}">
+        {{ "%.0f"|format(dashboard.adherence_7day) }}%
+      </div>
+      <div class="stat-label">7-day adherence</div>
+      <div class="text-muted" style="margin-top:.5rem;font-size:.8rem">
+        {% if dashboard.adherence_7day >= 80 %}Great — {{ dashboard.patient_name }} is on track!
+        {% elif dashboard.adherence_7day >= 50 %}Some doses are being missed.
+        {% else %}{{ dashboard.patient_name }} may need some help.
+        {% endif %}
+      </div>
+    </div>
+    <div class="card stat">
+      <div class="stat-val" style="color:{% if dashboard.adherence_30day >= 80 %}var(--sage){% elif dashboard.adherence_30day >= 50 %}var(--amber){% else %}var(--rose){% endif %}">
+        {{ "%.0f"|format(dashboard.adherence_30day) }}%
+      </div>
+      <div class="stat-label">30-day adherence</div>
+      <div class="text-muted" style="margin-top:.5rem;font-size:.8rem">Longer-term trend</div>
+    </div>
+  </div>
+
+  {# ── Dose counts ── #}
+  <div class="grid-2" style="margin-bottom:1.5rem">
+    <div class="card stat">
+      <div class="stat-val" style="color:var(--sage)">{{ dashboard.total_doses_taken }}</div>
+      <div class="stat-label">Total doses taken</div>
+    </div>
+    <div class="card stat">
+      <div class="stat-val" style="color:{% if dashboard.total_doses_missed == 0 %}var(--sage){% else %}var(--rose){% endif %}">
+        {{ dashboard.total_doses_missed }}
+      </div>
+      <div class="stat-label">Total doses missed</div>
+    </div>
+  </div>
+
+  {# ── Missed breakdown ── #}
+  <div class="card">
+    <div class="card-title">Missed doses this week</div>
+    {% if dashboard.missed_7day.total_missed == 0 %}
+      <p class="empty-state">🎉 No missed doses in the last 7 days!</p>
+    {% else %}
+      <div class="dose-row" style="padding:.5rem 0;border:none">
+        <span class="text-muted">Total missed</span>
+        <span class="badge badge-past">{{ dashboard.missed_7day.total_missed }}</span>
+      </div>
+      {% for med, count in dashboard.missed_7day.by_medication.items() %}
+      <div class="dose-row">
+        <span>{{ med }}</span>
+        <span class="badge badge-past">{{ count }} missed</span>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <p class="text-muted" style="margin-top:1.5rem;text-align:center">
+    This page updates when you refresh. Contact {{ dashboard.patient_name }}'s carer for clinical concerns.
+  </p>
+</div>
+{% endblock %}

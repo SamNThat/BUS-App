@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}My Medication — MediCare{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1>Good {{ 'morning' if now_hour < 12 else ('afternoon' if now_hour < 18 else 'evening') }}, {{ patient.name }} 👋</h1>
+    <p>Here's your medication schedule for today.</p>
+  </div>
+
+  {# ── Active reminder banners ── #}
+  <div id="notif-area">
+    {% for n in notifications %}
+    <div class="notif-banner" id="notif-{{ loop.index }}">
+      <div class="notif-icon">🔔</div>
+      <div class="notif-text">
+        <h3>Time to take {{ n.medication }}!</h3>
+        <p>Scheduled {{ n.dose_time }} · {{ n.time_left_minutes }} minutes left in window</p>
+      </div>
+      <button class="btn btn-primary" style="margin-left:auto;flex-shrink:0"
+              onclick="takeMed('{{ n.medication }}', this)">
+        Mark Taken
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── Today's schedule ── #}
+  {% for med in schedule %}
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-title">{{ med.name }}</div>
+    {% for dose in med.doses %}
+    <div class="dose-row">
+      <div class="dose-meta">
+        <span class="dose-time">Dose {{ dose.dose_number }} · {{ dose.time }}</span>
+        <span class="dose-window">Window closes {{ dose.window_end }}</span>
+      </div>
+      {% if dose.status == 'due' %}
+        <span class="badge badge-due">🔔 Due now</span>
+      {% elif dose.status == 'past' %}
+        <span class="badge badge-past">✗ Passed</span>
+      {% else %}
+        <span class="badge badge-upcoming">⏰ Upcoming</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  {# ── Taken today ── #}
+  <div class="card section-gap">
+    <div class="card-title">Taken today</div>
+    {% if today_taken %}
+      {% for dose in today_taken %}
+      <div class="dose-row">
+        <div class="dose-meta">
+          <span style="font-weight:600">{{ dose.med_name }}</span>
+          <span class="dose-window">Recorded {{ dose.timestamp.strftime('%H:%M') }}</span>
+        </div>
+        {% if dose.was_on_time %}
+          <span class="badge badge-taken">✓ On time</span>
+        {% else %}
+          <span class="badge badge-due">⚠ Late</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="empty-state">No doses recorded yet today.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Poll every 30 seconds to refresh schedule & notifications
+function refresh() {
+  fetch('/patient/status')
+    .then(r => r.json())
+    .then(data => updateUI(data))
+    .catch(() => {});
+}
+
+function updateUI(data) {
+  // Refresh notification banners
+  const area = document.getElementById('notif-area');
+  if (data.notifications.length === 0) {
+    area.innerHTML = '';
+  } else {
+    area.innerHTML = data.notifications.map((n, i) => `
+      <div class="notif-banner" id="notif-${i}">
+        <div class="notif-icon">🔔</div>
+        <div class="notif-text">
+          <h3>Time to take ${n.medication}!</h3>
+          <p>Scheduled ${n.dose_time} · ${n.time_left_minutes} minutes left</p>
+        </div>
+        <button class="btn btn-primary" style="margin-left:auto;flex-shrink:0"
+                onclick="takeMed('${n.medication}', this)">
+          Mark Taken
+        </button>
+      </div>`).join('');
+  }
+}
+
+function takeMed(medName, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  fetch(`/patient/take/${encodeURIComponent(medName)}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        showToast('✓ ' + data.message);
+        setTimeout(() => location.reload(), 800);
+      } else {
+        showToast('⚠ ' + data.message);
+        btn.disabled = false;
+        btn.textContent = 'Mark Taken';
+      }
+    });
+}
+
+setInterval(refresh, 30000);
+</script>
+{% endblock %}
