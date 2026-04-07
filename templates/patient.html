@@ -1,124 +1,175 @@
 {% extends "base.html" %}
-{% block title %}My Medication — MediCare{% endblock %}
+
+{% block title %}Medication Schedule - MediTrack{% endblock %}
 
 {% block content %}
-<div class="page">
-  <div class="page-header">
-    <h1>Good {{ 'morning' if now_hour < 12 else ('afternoon' if now_hour < 18 else 'evening') }}, {{ patient.name }} 👋</h1>
-    <p>Here's your medication schedule for today.</p>
-  </div>
-
-  {# ── Active reminder banners ── #}
-  <div id="notif-area">
-    {% for n in notifications %}
-    <div class="notif-banner" id="notif-{{ loop.index }}">
-      <div class="notif-icon">🔔</div>
-      <div class="notif-text">
-        <h3>Time to take {{ n.medication }}!</h3>
-        <p>Scheduled {{ n.dose_time }} · {{ n.time_left_minutes }} minutes left in window</p>
-      </div>
-      <button class="btn btn-primary" style="margin-left:auto;flex-shrink:0"
-              onclick="takeMed('{{ n.medication }}', this)">
-        Mark Taken
-      </button>
-    </div>
-    {% endfor %}
-  </div>
-
-  {# ── Today's schedule ── #}
-  {% for med in schedule %}
-  <div class="card" style="margin-bottom:1rem">
-    <div class="card-title">{{ med.name }}</div>
-    {% for dose in med.doses %}
-    <div class="dose-row">
-      <div class="dose-meta">
-        <span class="dose-time">Dose {{ dose.dose_number }} · {{ dose.time }}</span>
-        <span class="dose-window">Window closes {{ dose.window_end }}</span>
-      </div>
-      {% if dose.status == 'due' %}
-        <span class="badge badge-due">🔔 Due now</span>
-      {% elif dose.status == 'past' %}
-        <span class="badge badge-past">✗ Passed</span>
-      {% else %}
-        <span class="badge badge-upcoming">⏰ Upcoming</span>
-      {% endif %}
-    </div>
-    {% endfor %}
-  </div>
-  {% endfor %}
-
-  {# ── Taken today ── #}
-  <div class="card section-gap">
-    <div class="card-title">Taken today</div>
-    {% if today_taken %}
-      {% for dose in today_taken %}
-      <div class="dose-row">
-        <div class="dose-meta">
-          <span style="font-weight:600">{{ dose.med_name }}</span>
-          <span class="dose-window">Recorded {{ dose.timestamp.strftime('%H:%M') }}</span>
-        </div>
-        {% if dose.was_on_time %}
-          <span class="badge badge-taken">✓ On time</span>
-        {% else %}
-          <span class="badge badge-due">⚠ Late</span>
-        {% endif %}
-      </div>
-      {% endfor %}
-    {% else %}
-      <p class="empty-state">No doses recorded yet today.</p>
-    {% endif %}
-  </div>
+<div class="card">
+    <h2>Hello, {{ patient.name }}</h2>
+    <p>Here is your medication schedule for today.</p>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-// Poll every 30 seconds to refresh schedule & notifications
-function refresh() {
-  fetch('/patient/status')
-    .then(r => r.json())
-    .then(data => updateUI(data))
-    .catch(() => {});
-}
-
-function updateUI(data) {
-  // Refresh notification banners
-  const area = document.getElementById('notif-area');
-  if (data.notifications.length === 0) {
-    area.innerHTML = '';
-  } else {
-    area.innerHTML = data.notifications.map((n, i) => `
-      <div class="notif-banner" id="notif-${i}">
-        <div class="notif-icon">🔔</div>
-        <div class="notif-text">
-          <h3>Time to take ${n.medication}!</h3>
-          <p>Scheduled ${n.dose_time} · ${n.time_left_minutes} minutes left</p>
-        </div>
-        <button class="btn btn-primary" style="margin-left:auto;flex-shrink:0"
-                onclick="takeMed('${n.medication}', this)">
-          Mark Taken
+{% for med in schedule %}
+<div class="card">
+    <h2>{{ med.name }}</h2>
+    
+    {% if med.is_due %}
+    <div class="alert" id="alert-{{ loop.index }}" style="font-size: 1.3rem; padding: 1.5rem; background-color: #fff3cd; border: 3px solid #ffc107; animation: pulse 2s infinite;">
+        <strong style="font-size: 1.5rem;">TIME TO TAKE YOUR MEDICATION!</strong>
+        <br><br>
+        <button class="button" id="btn-{{ loop.index }}" onclick="takeMedication('{{ med.name }}', {{ loop.index }})" style="font-size: 1.2rem; padding: 1rem 2rem;">
+            I Have Taken It
         </button>
-      </div>`).join('');
-  }
+    </div>
+    {% endif %}
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Dose Time</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dose in med.doses %}
+            <tr>
+                <td>{{ dose.time }}</td>
+                <td>
+                    {% if dose.status == 'due' %}
+                    <span class="status-badge status-due">Due Now</span>
+                    {% elif dose.status == 'upcoming' %}
+                    <span class="status-badge status-upcoming">Upcoming</span>
+                    {% else %}
+                    <span class="status-badge status-missed">Passed</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+
+{% if recent_doses %}
+<div class="card">
+    <h2>Doses Taken Today</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Medication</th>
+                <th>Time Taken</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dose in recent_doses %}
+            <tr>
+                <td>{{ dose.medication_name }}</td>
+                <td>{{ dose.time.strftime('%H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Audio notification element (hidden) -->
+<audio id="reminderSound" style="display:none;">
+    <!-- Using a simple beep tone - you can replace with your own sound file -->
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTUIGWi78OScTgwOUKjo77ZkGwY4kte5zXguBSF1x/DdkUALFV2z6eypVRQKRp/g8L1tIQUrgs7y2Ik0CBdou+7mnEwNDU+o6O63ZBsGNpHY8cx3LQUgdcfw3I8/ChVdsunrqVQUCkaf4O+9bSEEK4LO8tiINQgXabvu5JxLDQ1PqOjut2QbBjaR2PHLdi0FIHbH79yPPgoVXbPq66lUFApGn+Dvvm0hBCuCzvLYiDUIGGm88OOcSwwNT6jo7rdkGgU1kdnxy3YsBB928O7cjz4KFV+z6uyqVRQKRZ/g8L5sIAQqgs7y2Yg1CBlouvDjnEoMDU+o6O63YxoGNZHZ8cp1LAQgdvDu244+ChRfs+rsqVUUCkaZ4O++bCAEKoHN8tmJNQgZaLrw4pxKDA1PqOjutmIaBjSR2fHKdSwEIHXx7tyOPQoUXrPq7KlUEwlGmeHvvm0gBSqAzfPZiTUIGGi68eKcSgsNT6fn7rZiGgY0ktjxyXQrBR91+O7cjTwKFV2z6+upVRMJRZjh8b5tIAUpgM3z2Yk1BxdnuvHinEoKDE+o5+61YhoGNJLZ8cl0KwUfdfju3I08ChRds+vrqVQTCUSX4fG+bR8FKn/N89iIMwYWZ7rx4pxJCgxPp+fvtWEaBS+R2fDIdCoEIHPx7duNPAkTXLLq66lTEwlEluDxvm4gBSmAzPPYiDMGFma68eGcSQoMTqfn77VhGgUvkdjwyHMqBCBz8e3bjTsJE1ux6uuoUxMJRZbg8b5tHwUpgMzz2IgzBhVmuvDhnEkLDE6m5u+1YRkFLpDY8Md0KgQhcvDu242/ChNbsOrqqFMTCUSW4PG+bR8FKYDMv9iIMwYVZbvw4ZxJCwxOpubvtWEZBS6Q2fDHdCoEIXPv7tyOPQoSW7Dq66hTEwlEluDxvm4gBSmAzPPYhzMGFWS68OGcSQoMT6fm7rVhGQUukNjxzXQqBCJz7u7cjj0KEVuv6OqoUxIJQ5bh8b5uIAQpf8zz2Ik0BhZluvDhnEgJDE+n5+61YRkFLpDY8M5zKgQjc+7t3I49CRFbr+jqqFQSCUOW4PG+bSAEKYDM89iJMwYVZLrw4ZxJCgxOp+fvtWEZBS6Q2PDOcyoEI3Pt7dyOPQoRW6/p66hUEglDluDxvm0fBSl/zPPXiDMGFWW68OKcSQoMTqfn7rZiGQUtj9jwznMqAyJy7uzcjTwKEVqu6euoUxIJQ5bg8b5uHwUpf8zz14czBhVkuvDinEgKDE+o5u62YhkFLZDZ8M5zKQMicuzu3Iw9ChFaru3sqFMSCEOW4PK+bR4EKH7M89iHMwYUZLrx45xICgtPqObutmEZBSyQ2fHOcyjzIXLs7tyLPAoQWq3t7KhSEghCleDyvm4fBSh+zPPYhzIFE2O78uScSAkLTqjm7rZhGAUsj9nxznIo8iBy7OvciTsJD1qr7eynUhEHQpTh8r5uHgQnfczz2IcyBBJju/LknEgJC06o5u61YRgFLI/Z8s5xJ/Igcevr2og6CQ9aquzsp1IQBz+T4PO+bh4DJ33M89eGMgQSY7vz5ZxICQtOqObutWAYBCuO2fLOcSfxH3Hq69mHOQgOWqrs7KdSEAc/k+Dzvms=" type="audio/wav">
+</audio>
+
+<script>
+// Sound notification system
+let reminderInterval = null;
+let hasPlayedSound = false;
+
+function playReminderSound() {
+    const audio = document.getElementById('reminderSound');
+    if (audio) {
+        audio.play().catch(e => console.log('Audio play failed:', e));
+    }
 }
 
-function takeMed(medName, btn) {
-  btn.disabled = true;
-  btn.textContent = '…';
-  fetch(`/patient/take/${encodeURIComponent(medName)}`, { method: 'POST' })
-    .then(r => r.json())
+function checkForDueMedication() {
+    // Check if there's a medication due right now
+    const isDue = document.querySelector('.alert') !== null;
+    
+    if (isDue && !hasPlayedSound) {
+        playReminderSound();
+        hasPlayedSound = true;
+        
+        // Play reminder every 5 minutes (300000ms) while medication is due
+        if (!reminderInterval) {
+            reminderInterval = setInterval(playReminderSound, 300000);
+        }
+    } else if (!isDue) {
+        // Stop reminders if no medication is due
+        if (reminderInterval) {
+            clearInterval(reminderInterval);
+            reminderInterval = null;
+        }
+        hasPlayedSound = false;
+    }
+}
+
+function takeMedication(medName, alertIndex) {
+    const button = document.getElementById('btn-' + alertIndex);
+    const alertBox = document.getElementById('alert-' + alertIndex);
+    
+    // Disable button immediately to prevent double-clicks
+    button.disabled = true;
+    button.textContent = 'Recording...';
+    
+    fetch('/patient/take/' + medName, {
+        method: 'POST'
+    })
+    .then(response => response.json())
     .then(data => {
-      if (data.success) {
-        showToast('✓ ' + data.message);
-        setTimeout(() => location.reload(), 800);
-      } else {
-        showToast('⚠ ' + data.message);
-        btn.disabled = false;
-        btn.textContent = 'Mark Taken';
-      }
+        if (data.success) {
+            // Stop reminder sound
+            if (reminderInterval) {
+                clearInterval(reminderInterval);
+                reminderInterval = null;
+            }
+            
+            // Change alert box to success message
+            alertBox.style.backgroundColor = '#d4edda';
+            alertBox.style.borderColor = '#28a745';
+            alertBox.style.animation = 'none';
+            alertBox.innerHTML = `
+                <div style="text-align: center;">
+                    <strong style="font-size: 1.5rem; color: #155724;">✓ Medication Taken Successfully!</strong>
+                    <br><br>
+                    <p style="font-size: 1.1rem; color: #155724;">Your dose has been recorded.</p>
+                </div>
+            `;
+            
+            // Reload page after 2 seconds to show updated schedule
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            // Re-enable button if there was an error
+            button.disabled = false;
+            button.textContent = 'I Have Taken It';
+            alert('Error: ' + (data.message || 'Could not record dose'));
+        }
+    })
+    .catch(error => {
+        // Re-enable button if request failed
+        button.disabled = false;
+        button.textContent = 'I Have Taken It';
+        alert('Error: Could not connect to server');
     });
 }
 
-setInterval(refresh, 30000);
+// Auto-refresh page every 2 minutes to check for new doses
+setInterval(function() {
+    window.location.reload();
+}, 120000); // 2 minutes
+
+// Check for due medication when page loads
+window.addEventListener('load', function() {
+    checkForDueMedication();
+});
 </script>
 {% endblock %}

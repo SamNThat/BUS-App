@@ -1,147 +1,59 @@
 {% extends "base.html" %}
-{% block title %}Carer Dashboard — MediCare{% endblock %}
+
+{% block title %}Carer Dashboard - MediTrack{% endblock %}
 
 {% block content %}
-<div class="page">
-  <div class="page-header">
-    <h1>Carer Dashboard</h1>
-    <p>Overview of all patients under your care.</p>
-  </div>
-
-  {# ── Top stats ── #}
-  <div class="grid-3" style="margin-bottom:1.5rem">
-    <div class="card stat">
-      <div class="stat-val">{{ dashboard.total_patients }}</div>
-      <div class="stat-label">Patients</div>
-    </div>
-    <div class="card stat">
-      <div class="stat-val" style="color:{% if dashboard.average_adherence >= 80 %}var(--sage){% else %}var(--amber){% endif %}">
-        {{ "%.0f"|format(dashboard.average_adherence) }}%
-      </div>
-      <div class="stat-label">Avg 7-day adherence</div>
-    </div>
-    <div class="card stat">
-      <div class="stat-val" style="color:{% if dashboard.total_missed_doses_7day == 0 %}var(--sage){% else %}var(--rose){% endif %}">
-        {{ dashboard.total_missed_doses_7day }}
-      </div>
-      <div class="stat-label">Missed doses (7 days)</div>
-    </div>
-  </div>
-
-  {# ── Patient cards ── #}
-  {% for p in dashboard.patients %}
-  <div class="card" style="margin-bottom:1rem">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
-      <div>
-        <div class="card-title" style="margin-bottom:.25rem">{{ p.patient_name }}</div>
-        <span class="text-muted">{{ p.condition }} · Age {{ p.age }} · {{ p.total_medications }} medication(s)</span>
-      </div>
-      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-        {% if p.adherence_7day >= 80 %}
-          <span class="badge badge-taken">Good adherence</span>
-        {% elif p.adherence_7day >= 50 %}
-          <span class="badge badge-due">Moderate</span>
-        {% else %}
-          <span class="badge badge-past">Low adherence</span>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="grid-2" style="margin-top:1.25rem;gap:.75rem">
-      <div style="background:var(--sage-pale);border-radius:10px;padding:1rem;text-align:center">
-        <div style="font-family:'DM Serif Display',serif;font-size:1.8rem;color:var(--sage)">
-          {{ "%.0f"|format(p.adherence_7day) }}%
-        </div>
-        <div class="stat-label">7-day adherence</div>
-      </div>
-      <div style="background:var(--sage-pale);border-radius:10px;padding:1rem;text-align:center">
-        <div style="font-family:'DM Serif Display',serif;font-size:1.8rem;color:{% if p.missed_7day.total_missed > 0 %}var(--rose){% else %}var(--sage){% endif %}">
-          {{ p.missed_7day.total_missed }}
-        </div>
-        <div class="stat-label">Missed (7 days)</div>
-      </div>
-    </div>
-
-    {% if p.missed_7day.by_medication %}
-    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
-      <div class="text-muted" style="margin-bottom:.5rem;font-weight:600">Missed by medication:</div>
-      {% for med, count in p.missed_7day.by_medication.items() %}
-      <div class="dose-row" style="padding:.5rem 0">
-        <span>{{ med }}</span>
-        <span class="badge badge-past">{{ count }} missed</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-  </div>
-  {% endfor %}
-
-  {# ── Notifications ── #}
-  <div class="card section-gap">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-      <div class="card-title" style="margin-bottom:0">
-        Alerts
-        <span id="unread-badge" class="badge badge-past" style="font-size:.7rem;margin-left:.5rem;display:none"></span>
-      </div>
-      <button class="btn btn-ghost" onclick="markRead()" style="font-size:.82rem;padding:.4rem .9rem">
-        Mark all read
-      </button>
-    </div>
-    <div id="notif-list">
-      {% set notifs = dashboard.notifications | reverse | list %}
-      {% if notifs %}
-        {% for n in notifs %}
-        <div class="dose-row" style="{% if not n.read %}background:var(--amber-pale);border-radius:8px;padding:.75rem 1rem;margin-bottom:.25rem;border:none;{% endif %}">
-          <div class="dose-meta">
-            <span style="font-weight:{% if not n.read %}600{% else %}400{% endif %}">{{ n.message }}</span>
-            <span class="dose-window">{{ n.timestamp.strftime('%H:%M') }}</span>
-          </div>
-          {% if not n.read %}<span class="badge badge-due" style="flex-shrink:0">New</span>{% endif %}
-        </div>
-        {% endfor %}
-      {% else %}
-        <p class="empty-state">No alerts yet. All doses on track.</p>
-      {% endif %}
-    </div>
-  </div>
+<div class="card">
+    <h2>Carer Dashboard</h2>
+    <p>Welcome, {{ carer.name }}</p>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-// Poll every 30s for live updates
-function refreshDashboard() {
-  fetch('/carer/status')
-    .then(r => r.json())
-    .then(data => {
-      // Update unread badge
-      const badge = document.getElementById('unread-badge');
-      if (data.unread_count > 0) {
-        badge.textContent = data.unread_count + ' new';
-        badge.style.display = 'inline-flex';
-      } else {
-        badge.style.display = 'none';
-      }
-      // Update notification list
-      if (data.notifications.length > 0) {
-        const list = document.getElementById('notif-list');
-        list.innerHTML = [...data.notifications].reverse().map(n => `
-          <div class="dose-row" style="${!n.read ? 'background:var(--amber-pale);border-radius:8px;padding:.75rem 1rem;margin-bottom:.25rem;border:none;' : ''}">
-            <div class="dose-meta">
-              <span style="font-weight:${!n.read ? 600 : 400}">${n.message}</span>
-              <span class="dose-window">${n.time}</span>
-            </div>
-            ${!n.read ? '<span class="badge badge-due" style="flex-shrink:0">New</span>' : ''}
-          </div>`).join('');
-      }
-    }).catch(() => {});
-}
+<div class="card">
+    <h2>Patient Overview: {{ patient.name }}</h2>
+    
+    <table>
+        <tr>
+            <th>Age</th>
+            <td>{{ patient.age }}</td>
+        </tr>
+        <tr>
+            <th>Medications</th>
+            <td>{{ patient.medications|length }}</td>
+        </tr>
+        <tr>
+            <th>Doses Taken</th>
+            <td>{{ total_taken }}</td>
+        </tr>
+        <tr>
+            <th>Doses Missed</th>
+            <td>{{ total_missed }}</td>
+        </tr>
+    </table>
+</div>
 
-function markRead() {
-  fetch('/carer/notifications/read', { method: 'POST' })
-    .then(() => { refreshDashboard(); showToast('All notifications marked as read'); });
-}
-
-setInterval(refreshDashboard, 30000);
-</script>
+{% if alerts %}
+<div class="card">
+    <h2>Recent Alerts</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Alert</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for alert in alerts|reverse %}
+            <tr>
+                <td>{{ alert.time.strftime('%H:%M') }}</td>
+                <td>{{ alert.message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card success">
+    <p>No alerts. All doses are being taken on time.</p>
+</div>
+{% endif %}
 {% endblock %}
