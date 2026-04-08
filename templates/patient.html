@@ -9,14 +9,23 @@
 </div>
 
 {% for med in schedule %}
-<div class="card">
-    <h2>{{ med.name }}</h2>
+<div class="card" style="border-left: 4px solid {% if med.priority == 'Critical' %}#c0392b{% elif med.priority == 'High' %}#e67e22{% else %}#27ae60{% endif %};">
+    <h2 style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+        {{ med.full_label }}
+        <span class="priority-badge priority-{{ med.priority | lower }}">{{ med.priority }}</span>
+    </h2>
     
     {% if med.is_due %}
     <div class="alert" id="alert-{{ loop.index }}" style="font-size: 1.3rem; padding: 1.5rem; background-color: #fff3cd; border: 3px solid #ffc107; animation: pulse 2s infinite;">
         <strong style="font-size: 1.5rem;">TIME TO TAKE YOUR MEDICATION!</strong>
-        <br><br>
-        <button class="button" id="btn-{{ loop.index }}" onclick="takeMedication('{{ med.name }}', {{ loop.index }})" style="font-size: 1.2rem; padding: 1rem 2rem;">
+        <br>
+        <p style="margin: 0.5rem 0; font-size: 1.1rem; color: #856404;">
+            Please take <strong>{{ med.full_label }}</strong>{% if med.dose_label %} (1 tablet / {{ med.dose_label }}){% endif %}
+        </p>
+        <br>
+        <button class="button" id="btn-{{ loop.index }}" 
+                onclick="takeMedication('{{ med.name }}', {{ loop.index }})" 
+                style="font-size: 1.2rem; padding: 1rem 2rem;">
             I Have Taken It
         </button>
     </div>
@@ -71,67 +80,122 @@
 </div>
 {% endif %}
 
-<!-- Audio notification element (hidden) -->
-<audio id="reminderSound" style="display:none;">
-    <!-- Using a simple beep tone - you can replace with your own sound file -->
-    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTUIGWi78OScTgwOUKjo77ZkGwY4kte5zXguBSF1x/DdkUALFV2z6eypVRQKRp/g8L1tIQUrgs7y2Ik0CBdou+7mnEwNDU+o6O63ZBsGNpHY8cx3LQUgdcfw3I8/ChVdsunrqVQUCkaf4O+9bSEEK4LO8tiINQgXabvu5JxLDQ1PqOjut2QbBjaR2PHLdi0FIHbH79yPPgoVXbPq66lUFApGn+Dvvm0hBCuCzvLYiDUIGGm88OOcSwwNT6jo7rdkGgU1kdnxy3YsBB928O7cjz4KFV+z6uyqVRQKRZ/g8L5sIAQqgs7y2Yg1CBlouvDjnEoMDU+o6O63YxoGNZHZ8cp1LAQgdvDu244+ChRfs+rsqVUUCkaZ4O++bCAEKoHN8tmJNQgZaLrw4pxKDA1PqOjutmIaBjSR2fHKdSwEIHXx7tyOPQoUXrPq7KlUEwlGmeHvvm0gBSqAzfPZiTUIGGi68eKcSgsNT6fn7rZiGgY0ktjxyXQrBR91+O7cjTwKFV2z6+upVRMJRZjh8b5tIAUpgM3z2Yk1BxdnuvHinEoKDE+o5+61YhoGNJLZ8cl0KwUfdfju3I08ChRds+vrqVQTCUSX4fG+bR8FKn/N89iIMwYWZ7rx4pxJCgxPp+fvtWEaBS+R2fDIdCoEIHPx7duNPAkTXLLq66lTEwlEluDxvm4gBSmAzPPYiDMGFma68eGcSQoMTqfn77VhGgUvkdjwyHMqBCBz8e3bjTsJE1ux6uuoUxMJRZbg8b5tHwUpgMzz2IgzBhVmuvDhnEkLDE6m5u+1YRkFLpDY8Md0KgQhcvDu242/ChNbsOrqqFMTCUSW4PG+bR8FKYDMv9iIMwYVZbvw4ZxJCwxOpubvtWEZBS6Q2fDHdCoEIXPv7tyOPQoSW7Dq66hTEwlEluDxvm4gBSmAzPPYhzMGFWS68OGcSQoMT6fm7rVhGQUukNjxzXQqBCJz7u7cjj0KEVuv6OqoUxIJQ5bh8b5uIAQpf8zz2Ik0BhZluvDhnEgJDE+n5+61YRkFLpDY8M5zKgQjc+7t3I49CRFbr+jqqFQSCUOW4PG+bSAEKYDM89iJMwYVZLrw4ZxJCgxOp+fvtWEZBS6Q2PDOcyoEI3Pt7dyOPQoRW6/p66hUEglDluDxvm0fBSl/zPPXiDMGFWW68OKcSQoMTqfn7rZiGQUtj9jwznMqAyJy7uzcjTwKEVqu6euoUxIJQ5bg8b5uHwUpf8zz14czBhVkuvDinEgKDE+o5u62YhkFLZDZ8M5zKQMicuzu3Iw9ChFaru3sqFMSCEOW4PK+bR4EKH7M89iHMwYUZLrx45xICgtPqObutmEZBSyQ2fHOcyjzIXLs7tyLPAoQWq3t7KhSEghCleDyvm4fBSh+zPPYhzIFE2O78uScSAkLTqjm7rZhGAUsj9nxznIo8iBy7OvciTsJD1qr7eynUhEHQpTh8r5uHgQnfczz2IcyBBJju/LknEgJC06o5u61YRgFLI/Z8s5xJ/Igcevr2og6CQ9aquzsp1IQBz+T4PO+bh4DJ33M89eGMgQSY7vz5ZxICQtOqObutWAYBCuO2fLOcSfxH3Hq69mHOQgOWqrs7KdSEAc/k+Dzvms=" type="audio/wav">
-</audio>
+<style>
+    .priority-badge {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 10px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        vertical-align: middle;
+    }
+    .priority-critical { background: #fde8e8; color: #c0392b; }
+    .priority-high      { background: #fef0e0; color: #d35400; }
+    .priority-routine   { background: #e8f8ee; color: #1e8449; }
+</style>
 
 <script>
-// Sound notification system
-let reminderInterval = null;
-let hasPlayedSound = false;
+// ─── Audio generation using Web Audio API ───────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-function playReminderSound() {
-    const audio = document.getElementById('reminderSound');
-    if (audio) {
-        audio.play().catch(e => console.log('Audio play failed:', e));
+function playBeep(volume, frequency, duration) {
+    try {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency || 880, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (duration || 0.4));
+
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + (duration || 0.4));
+    } catch (e) {
+        console.log('Audio error:', e);
     }
 }
 
-function checkForDueMedication() {
-    // Check if there's a medication due right now
-    const isDue = document.querySelector('.alert') !== null;
-    
-    if (isDue && !hasPlayedSound) {
-        playReminderSound();
-        hasPlayedSound = true;
-        
-        // Play reminder every 5 minutes (300000ms) while medication is due
-        if (!reminderInterval) {
-            reminderInterval = setInterval(playReminderSound, 300000);
-        }
-    } else if (!isDue) {
-        // Stop reminders if no medication is due
-        if (reminderInterval) {
-            clearInterval(reminderInterval);
-            reminderInterval = null;
-        }
-        hasPlayedSound = false;
-    }
+function playReminderSequence(loud) {
+    // Play 4 beeps in sequence
+    const volume = loud ? 1.0 : 0.4;
+    const freq = loud ? 1046 : 880; // higher pitch when loud
+    const delays = [0, 0.5, 1.0, 1.5];
+    delays.forEach(delay => {
+        setTimeout(() => playBeep(volume, freq, 0.35), delay * 1000);
+    });
 }
 
+// ─── Reminder scheduling ─────────────────────────────────────────────────────
+// Per spec: audible alert every 15 minutes for 1 hour.
+// Regular volume first 30 mins, louder in the last 30 mins.
+// Schedule: t=0, t=15, t=30 (louder), t=45 (louder), t=60 (louder) — 5 alerts total over 1 hour.
+
+let reminderTimeouts = [];
+let alertStartTime = null;
+
+function isDueMedPresent() {
+    return document.querySelector('.alert') !== null;
+}
+
+function scheduleReminders() {
+    if (!isDueMedPresent()) return;
+
+    // Resume AudioContext on first user interaction (browser autoplay policy)
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+
+    alertStartTime = Date.now();
+
+    // Minutes at which to fire reminders: 0, 15, 30, 45, 60
+    const reminderMinutes = [0, 15, 30, 45, 60];
+
+    reminderTimeouts.forEach(t => clearTimeout(t));
+    reminderTimeouts = [];
+
+    reminderMinutes.forEach(mins => {
+        const isLoud = mins >= 30; // louder in the last 30 minutes
+        const t = setTimeout(() => {
+            if (isDueMedPresent()) {
+                playReminderSequence(isLoud);
+            }
+        }, mins * 60 * 1000);
+        reminderTimeouts.push(t);
+    });
+}
+
+function cancelReminders() {
+    reminderTimeouts.forEach(t => clearTimeout(t));
+    reminderTimeouts = [];
+}
+
+// ─── Take medication ──────────────────────────────────────────────────────────
 function takeMedication(medName, alertIndex) {
     const button = document.getElementById('btn-' + alertIndex);
     const alertBox = document.getElementById('alert-' + alertIndex);
-    
-    // Disable button immediately to prevent double-clicks
+
     button.disabled = true;
     button.textContent = 'Recording...';
-    
-    fetch('/patient/take/' + medName, {
-        method: 'POST'
+
+    fetch('/patient/take/' + encodeURIComponent(medName), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Server returned ' + response.status);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
-            // Stop reminder sound
-            if (reminderInterval) {
-                clearInterval(reminderInterval);
-                reminderInterval = null;
-            }
-            
-            // Change alert box to success message
+            cancelReminders();
+
             alertBox.style.backgroundColor = '#d4edda';
             alertBox.style.borderColor = '#28a745';
             alertBox.style.animation = 'none';
@@ -139,39 +203,59 @@ function takeMedication(medName, alertIndex) {
                 <div style="text-align: center;">
                     <strong style="font-size: 1.5rem; color: #155724;">✓ Medication Taken Successfully!</strong>
                     <br><br>
-                    <p style="font-size: 1.1rem; color: #155724;">Your dose has been recorded.</p>
+                    <p style="font-size: 1.1rem; color: #155724;">Your <strong>${medName}</strong> dose has been recorded.</p>
                 </div>
             `;
-            
-            // Reload page after 2 seconds to show updated schedule
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
+
+            setTimeout(() => window.location.reload(), 2000);
         } else {
-            // Re-enable button if there was an error
             button.disabled = false;
             button.textContent = 'I Have Taken It';
-            alert('Error: ' + (data.message || 'Could not record dose'));
+            showError(data.message || 'Could not record dose. Please try again.');
         }
     })
     .catch(error => {
-        // Re-enable button if request failed
         button.disabled = false;
         button.textContent = 'I Have Taken It';
-        alert('Error: Could not connect to server');
+        showError('Could not connect to server. Please check your connection and try again.');
+        console.error('Fetch error:', error);
     });
 }
 
-// Auto-refresh page every 2 minutes to check for new doses
-setInterval(function() {
-    window.location.reload();
-}, 120000); // 2 minutes
+function showError(message) {
+    // Remove any existing error banner
+    const existing = document.getElementById('error-banner');
+    if (existing) existing.remove();
 
-// Check for due medication when page loads
-window.addEventListener('load', function() {
-    checkForDueMedication();
+    const banner = document.createElement('div');
+    banner.id = 'error-banner';
+    banner.style.cssText = `
+        position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+        background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24;
+        padding: 1rem 2rem; border-radius: 8px; z-index: 9999;
+        font-size: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        max-width: 90vw; text-align: center;
+    `;
+    banner.textContent = '⚠ ' + message;
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 5000);
+}
+
+// ─── Page auto-refresh every 2 minutes ───────────────────────────────────────
+setTimeout(() => window.location.reload(), 120000);
+
+// ─── On load: start reminders if a dose is due ───────────────────────────────
+window.addEventListener('load', () => {
+    if (isDueMedPresent()) {
+        // Kick off reminders on first click anywhere (respects browser autoplay policy)
+        document.addEventListener('click', function startOnInteraction() {
+            scheduleReminders();
+            document.removeEventListener('click', startOnInteraction);
+        }, { once: true });
+
+        // Also try immediately (works if page was already interacted with)
+        scheduleReminders();
+    }
 });
 </script>
 {% endblock %}
-
-<!-- Updated version -->
