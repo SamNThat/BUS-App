@@ -4,6 +4,8 @@ import time
 from flask import Flask, render_template, redirect, url_for, session, request, jsonify
 from models import Medication, Patient, Carer
 
+#Updated this with better button logic for old people
+
 app = Flask(__name__)
 app.secret_key = 'medication-tracker-secret'
 
