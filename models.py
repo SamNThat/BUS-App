@@ -36,13 +36,18 @@ class Medication:
 
     def create_schedule(self):
         """Generate today's dose times based on the medication parameters"""
+        # Use today's date
         today = datetime.datetime.now().date()
+
+        # Create the first dose time
         first_time = datetime.datetime.combine(today, datetime.time(int(self.first_dose_hour), 0))
         self.dose_times = [first_time]
+
+        # Generate the subsequent doses based on frequency
         for i in range(1, self.doses_per_day):
             next_time = self.dose_times[i - 1] + datetime.timedelta(hours=self.hours_between_doses)
+            # If the next dose pushes into tomorrow, that's fine, it stays in the list
             self.dose_times.append(next_time)
-
     def refresh_schedule(self):
         """Regenerate schedule after editing parameters"""
         self.create_schedule()

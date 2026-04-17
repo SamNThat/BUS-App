@@ -13,7 +13,7 @@ patient = Patient('Dorothy', 71)
 medication = Medication('Aricept', 3, 2, 4, 23, dose_mg=5, stock_count = 30)
 patient.add_medication(medication)
 carer.add_patient(patient)
-
+all_patients = [patient]
 # Simple login credentials
 USERS = {
     'dorothy': {'password': '1234', 'role': 'patient'},
@@ -103,10 +103,23 @@ def patient_view():
     if session.get('role') != 'patient':
         return redirect(url_for('login'))
 
+    # 1. Get the username of whoever just logged in
+    current_username = session.get('username', '').lower()
+
+    # 2. Find THAT specific patient in our list
+    # We match the name you typed in 'Full Name' during registration
+    # (assuming username and full name are used consistently)
+    current_patient = next((p for p in all_patients if p.name.lower() == current_username), None)
+
+    # 3. If we can't find them, default to the original patient (Dorothy)
+    if not current_patient:
+        current_patient = patient
+
     schedule = []
     now = datetime.datetime.now()
 
-    for med in patient.medications:
+    # 4. Use 'current_patient' instead of the hard-coded 'patient'
+    for med in current_patient.medications:
         doses = []
         for dose_time in med.dose_times:
             window_end = dose_time + datetime.timedelta(hours=med.window_hours)
@@ -123,7 +136,7 @@ def patient_view():
                 'status': status
             })
 
-        # Check if medication is currently due AND hasn't been taken yet
+        # Logic to enable/disable the "Take" button
         is_due = False
         if med.is_dose_due_now():
             for dose_time in med.dose_times:
@@ -132,7 +145,7 @@ def patient_view():
                     already_taken = any(
                         d['medication_name'] == med.name and
                         dose_time <= d['time'] <= window_end
-                        for d in patient.doses_taken
+                        for d in current_patient.doses_taken
                     )
                     if not already_taken:
                         is_due = True
@@ -146,12 +159,10 @@ def patient_view():
             'is_due': is_due
         })
 
-    recent_doses = patient.get_recent_doses()
-
     return render_template('patient.html',
-                           patient=patient,
+                           patient=current_patient,
                            schedule=schedule,
-                           recent_doses=recent_doses)
+                           recent_doses=current_patient.get_recent_doses())
 
 
 @app.route('/patient/take/<medication_name>', methods=['POST'])
@@ -159,9 +170,12 @@ def take_medication(medication_name):
     if session.get('role') != 'patient':
         return jsonify({'success': False, 'message': 'Unauthorised'}), 403
 
-    # Find the medication
+    # Find the specific patient again
+    current_username = session.get('username', '').lower()
+    current_patient = next((p for p in all_patients if p.name.lower() == current_username), patient)
+
     matched_med = next(
-        (med for med in patient.medications if med.name == medication_name),
+        (med for med in current_patient.medications if med.name == medication_name),
         None
     )
 
@@ -171,30 +185,31 @@ def take_medication(medication_name):
     if not matched_med.is_dose_due_now():
         return jsonify({'success': False, 'message': 'This dose is not due right now'}), 400
 
-    # Check it hasn't already been taken in this window
+    # Safety check: Already taken?
     now = datetime.datetime.now()
+    already_taken = False
     for dose_time in matched_med.dose_times:
         window_end = dose_time + datetime.timedelta(hours=matched_med.window_hours)
         if dose_time <= now <= window_end:
             already_taken = any(
                 d['medication_name'] == matched_med.name and
                 dose_time <= d['time'] <= window_end
-                for d in patient.doses_taken
+                for d in current_patient.doses_taken
             )
-            if already_taken:
-                return jsonify({'success': False, 'message': 'Dose already recorded for this window'}), 400
             break
 
-    patient.take_dose(matched_med)
-    #added
+    if already_taken:
+        return jsonify({'success': False, 'message': 'Dose already recorded'}), 400
+
+    current_patient.take_dose(matched_med)
+
     if matched_med.is_stock_low():
         carer.add_alert(
-            f"LOW STOCK: {patient.name}'s {matched_med.full_label} has only {matched_med.stock_count} doses left.",
+            f"LOW STOCK: {current_patient.name}'s {matched_med.full_label} has only {matched_med.stock_count} doses left.",
             alert_type='low_stock'
         )
+
     return jsonify({'success': True})
-
-
 @app.route('/carer')
 def carer_view():
     if session.get('role') != 'carer':
@@ -208,42 +223,49 @@ def carer_view():
                            patient=patient,
                            total_taken=total_taken,
                            total_missed=total_missed,
-                           alerts=carer.alerts[-10:])
-
+                           alerts=carer.alerts[-10:],
+                           adherence = patient.get_adherence_data())
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    error = None
-    success = None
-
     if request.method == 'POST':
-        # Only carers can register new accounts
-        if session.get('role') != 'carer':
-            return redirect(url_for('login'))
-
-        account_type = request.form.get('account_type')
+        # Credentials
         username = request.form.get('username', '').strip().lower()
-        password = request.form.get('password', '').strip()
+        password = request.form.get('password', '')
+        role = request.form.get('account_type')
         full_name = request.form.get('full_name', '').strip()
-        age = request.form.get('age', '').strip()
 
-        # Validation
-        if not all([username, password, full_name, age]):
-            error = 'All fields are required.'
-        elif username in USERS:
-            error = 'Username already taken.'
-        else:
-            try:
-                age_int = int(age)
-                if account_type == 'patient':
-                    new_patient = Patient(full_name, age_int)
-                    carer.add_patient(new_patient)
-                    USERS[username] = {'password': password, 'role': 'patient'}
-                else:
-                    USERS[username] = {'password': password, 'role': 'carer'}
-                return redirect(url_for('login'))  # Success - redirect to login
-            except ValueError:
-                error = 'Age must be a valid number.'
+        if role == 'patient':
+            # 1. Create the Class Objects
+            new_patient = Patient(username, int(request.form.get('age', 0)))
+            new_med = Medication(
+                name=request.form.get('med_name'),
+                doses_per_day=int(request.form.get('doses_per_day', 1)),
+                window_hours=int(request.form.get('window_hours', 2)),
+                hours_between_doses=int(request.form.get('hours_between', 4)),
+                first_dose_hour=int(request.form.get('first_dose_hour', 8)),
+                dose_mg=int(request.form.get('dose_mg', 0)),
+                stock_count=int(request.form.get('stock_count', 0))
+            )
+            new_patient.add_medication(new_med)
+            all_patients.append(new_patient)
+            carer.add_patient(new_patient) # Links object to the main Carer instance
 
-    return render_template('register.html', error=error, success=success)
+            # 2. Add to Login Dictionary
+            USERS[username] = {'password': password, 'role': 'patient'}
+
+        elif role == 'family':
+            # Just add the login credentials
+            # They will see the same dashboard as 'carer'
+            USERS[username] = {'password': password, 'role': 'carer'}
+
+        return redirect(url_for('login'))
+
+    return render_template('register.html', patients=carer.patients)
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+
+
+## to add
+# better system for adding patients choosing medictaion etc
+#perosnalised name greetings for diff patients
+#add fmaily not carer
