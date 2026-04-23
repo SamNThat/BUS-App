@@ -2,7 +2,7 @@ import datetime
 import threading
 import time
 from flask import Flask, render_template, redirect, url_for, session, request, jsonify
-from models import Medication, Patient, Carer
+from models import Medication, Patient, Carer, PRIORITY_LABELS
 
 app = Flask(__name__)
 app.secret_key = 'medication-tracker-secret'
@@ -224,7 +224,69 @@ def carer_view():
                            total_taken=total_taken,
                            total_missed=total_missed,
                            alerts=carer.alerts[-10:],
-                           adherence = patient.get_adherence_data())
+                           adherence=patient.get_adherence_data(),
+                           priority_labels=PRIORITY_LABELS)
+
+
+@app.route('/carer/medication/add', methods=['POST'])
+def add_medication():
+    if session.get('role') != 'carer':
+        return jsonify({'success': False, 'message': 'Unauthorised'}), 403
+
+    try:
+        new_med = Medication(
+            name=request.form.get('name', '').strip(),
+            doses_per_day=int(request.form.get('doses_per_day', 1)),
+            window_hours=int(request.form.get('window_hours', 2)),
+            hours_between_doses=int(request.form.get('hours_between_doses', 8)),
+            first_dose_hour=int(request.form.get('first_dose_hour', 8)),
+            dose_mg=float(request.form.get('dose_mg')) if request.form.get('dose_mg') else None,
+            stock_count=int(request.form.get('stock_count')) if request.form.get('stock_count') else None,
+            low_stock_threshold=int(request.form.get('low_stock_threshold', 7)),
+            priority=request.form.get('priority', 'Routine')
+        )
+        patient.add_medication(new_med)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/carer/medication/edit/<med_name>', methods=['POST'])
+def edit_medication(med_name):
+    if session.get('role') != 'carer':
+        return jsonify({'success': False, 'message': 'Unauthorised'}), 403
+
+    med = patient.get_medication(med_name)
+    if not med:
+        return jsonify({'success': False, 'message': 'Medication not found'}), 404
+
+    try:
+        med.name = request.form.get('name', med.name).strip()
+        med.doses_per_day = int(request.form.get('doses_per_day', med.doses_per_day))
+        med.window_hours = int(request.form.get('window_hours', med.window_hours))
+        med.hours_between_doses = int(request.form.get('hours_between_doses', med.hours_between_doses))
+        med.first_dose_hour = int(request.form.get('first_dose_hour', med.first_dose_hour))
+        med.dose_mg = float(request.form.get('dose_mg')) if request.form.get('dose_mg') else None
+        med.stock_count = int(request.form.get('stock_count')) if request.form.get('stock_count') else med.stock_count
+        med.low_stock_threshold = int(request.form.get('low_stock_threshold', med.low_stock_threshold))
+        med.priority = request.form.get('priority', med.priority)
+        med.refresh_schedule()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/carer/medication/delete/<med_name>', methods=['POST'])
+def delete_medication(med_name):
+    if session.get('role') != 'carer':
+        return jsonify({'success': False, 'message': 'Unauthorised'}), 403
+
+    med = patient.get_medication(med_name)
+    if not med:
+        return jsonify({'success': False, 'message': 'Medication not found'}), 404
+
+    patient.remove_medication(med_name)
+    return jsonify({'success': True})
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
