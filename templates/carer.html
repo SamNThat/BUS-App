@@ -118,8 +118,8 @@
                 </div>
             </div>
             <div style="display:flex; gap:0.5rem; flex-shrink:0;">
-                <button class="button" style="background:#1e4a5f; font-size:0.85rem; padding:0.4rem 0.9rem;"
-                    onclick="openModal('edit', {{ med.to_dict() | tojson }})">Edit</button>
+                <button class="button edit-btn" style="background:#1e4a5f; font-size:0.85rem; padding:0.4rem 0.9rem;"
+                    data-med='{{ med.to_dict() | tojson }}'>Edit</button>
                 <button class="button" style="background:#a94442; font-size:0.85rem; padding:0.4rem 0.9rem;"
                     onclick="confirmDelete('{{ med.name }}')">Delete</button>
             </div>
@@ -377,6 +377,21 @@
 })();
 
 // ── Modal helpers ────────────────────────────────────────────────────────────
+
+// Wire up edit buttons safely via data attributes (avoids HTML-escaping issues in onclick)
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.edit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            try {
+                const med = JSON.parse(btn.getAttribute('data-med'));
+                openModal('edit', med);
+            } catch (e) {
+                console.error('Could not parse medication data:', e);
+            }
+        });
+    });
+});
+
 function openModal(mode, med) {
     document.getElementById('med-modal').style.display = 'block';
     document.getElementById('modal-error').style.display = 'none';
